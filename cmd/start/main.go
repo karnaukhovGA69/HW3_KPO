@@ -6,9 +6,13 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 const (
@@ -33,17 +37,43 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	db, err := storage.NewStorage(ctx, config.StorageDB.DNS)
+	db, err := storage.NewStorage(ctx, config.StorageDB.DSN)
 	if err != nil {
 		slog.Error("failed to connect to storage db", "error", err)
 		os.Exit(1)
 	}
-	defer db.Close()
-
 	slog.Info("connected to db is successful")
-	//TODO: init router chi, render
+	defer db.Close()
+	repo := storage.NewRepository(db)
+	hand := storage.NewHandler(repo)
 
-	//TODO: run server
+	r := chi.NewRouter()
+	r.Use(middleware.RequestID)
+	r.Use(middleware.Recoverer)
+	r.Use(middleware.Logger)
+	r.Route("/works", func(rt chi.Router) {
+		rt.Post("/", hand.CreateWork)
+		rt.Get("/{id}", hand.GetWork)
+	})
+
+	server := http.Server{
+		Addr:    config.HTTPServer.Address,
+		Handler: r,
+	}
+	go func() {
+		slog.Info("starting http server", "addr", config.HTTPServer.Address)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("http server error", "error", err)
+			os.Exit(1)
+		}
+	}()
+	<-ctx.Done()
+	slog.Info("shutting down http server")
+
+	if err := server.Shutdown(context.Background()); err != nil {
+		slog.Error("http server shutdown error", "error", err)
+	}
+
 }
 
 func setupLogger(env string) *slog.Logger {

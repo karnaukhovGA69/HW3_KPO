@@ -22,7 +22,7 @@ type HTTPServer struct {
 }
 
 type StorageDB struct {
-	DNS string `yaml:"dsn" env:"STORAGE_DB_DCN"`
+	DSN string `yaml:"dsn" env:"STORAGE_DB_DCN"`
 }
 
 func MustLoad() *Config {
