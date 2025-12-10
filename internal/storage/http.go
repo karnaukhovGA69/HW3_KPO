@@ -10,10 +10,10 @@ import (
 )
 
 type Handler struct {
-	repo *Reposiroty
+	repo *Repository
 }
 
-func NewHandler(repo *Reposiroty) *Handler {
+func NewHandler(repo *Repository) *Handler {
 	return &Handler{
 		repo: repo,
 	}

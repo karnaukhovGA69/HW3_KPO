@@ -7,17 +7,17 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type Reposiroty struct {
+type Repository struct {
 	pool *pgxpool.Pool
 }
 
-func NewRepository(pool *pgxpool.Pool) *Reposiroty {
-	return &Reposiroty{
+func NewRepository(pool *pgxpool.Pool) *Repository {
+	return &Repository{
 		pool: pool,
 	}
 }
 
-func (r *Reposiroty) CreateWork(ctx context.Context, work *Work) error {
+func (r *Repository) CreateWork(ctx context.Context, work *Work) error {
 	const query = `
 	INSERT INTO works (student, task, file_path)
 	VALUES ($1, $2, $3)
@@ -30,7 +30,7 @@ func (r *Reposiroty) CreateWork(ctx context.Context, work *Work) error {
 	return nil
 }
 
-func (r *Reposiroty) GetWork(ctx context.Context, id int64) (*Work, error) {
+func (r *Repository) GetWork(ctx context.Context, id int64) (*Work, error) {
 	const query = `
 	Select id, student, task, file_path, uploaded_at FROM works  WHERE id = $1;`
 

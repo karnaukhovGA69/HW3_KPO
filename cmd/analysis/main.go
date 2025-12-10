@@ -1,15 +1,16 @@
 package main
 
 import (
+	"HW_KPO3/internal/analysis"
 	"HW_KPO3/internal/config"
 	"HW_KPO3/internal/storage"
 	"context"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -24,56 +25,53 @@ const (
 
 func main() {
 	config := config.MustLoad()
-	fmt.Println(config)
+	logger := setupLogger(config.Env)
+	slog.SetDefault(logger)
 
-	log := setupLogger(config.Env)
-	slog.SetDefault(log)
 	slog.Info("config loaded",
 		"env", config.Env,
-		"addr", config.HTTPServer.Address,
 		"storage_path", config.StoragePath,
 	)
 
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
 	defer cancel()
-
-	db, err := storage.NewStorage(ctx, config.StorageDB.DSN)
+	dbAnalysis, err := storage.NewStorage(ctx, config.AnalysisDB.DSN)
 	if err != nil {
-		slog.Error("failed to connect to storage db", "error", err)
+		slog.Error("failed to connect to analysis db", "error", err)
 		os.Exit(1)
 	}
-	slog.Info("connected to db is successful")
-	defer db.Close()
-	repo := storage.NewRepository(db)
-	hand := storage.NewHandler(repo)
-
+	defer dbAnalysis.Close()
+	slog.Info("connected to analysis db")
+	repo := analysis.NewRepository(dbAnalysis)
+	handler := analysis.NewHandler(repo)
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Logger)
-	r.Route("/works", func(rt chi.Router) {
-		rt.Post("/", hand.CreateWork)
-		rt.Get("/{id}", hand.GetWork)
-	})
 
-	server := http.Server{
-		Addr:    config.HTTPServer.Address,
+	r.Route("/reports", func(r chi.Router) {
+		r.Post("/", handler.CreateReport)
+		r.Get("/{id}", handler.GetReport)
+	})
+	address := "localhost:8069"
+	server := &http.Server{
+		Addr:    address,
 		Handler: r,
 	}
 	go func() {
-		slog.Info("starting http server", "addr", config.HTTPServer.Address)
+		slog.Info("starting analysis http server", "address", address)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("http server error", "error", err)
 			os.Exit(1)
 		}
 	}()
 	<-ctx.Done()
-	slog.Info("shutting down http server")
-
-	if err := server.Shutdown(context.Background()); err != nil {
-		slog.Error("http server shutdown error", "error", err)
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+	slog.Info("shutting down analysis http server")
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		slog.Error("server shutdown error", "err", err)
 	}
-
 }
 
 func setupLogger(env string) *slog.Logger {

@@ -2,9 +2,17 @@ env: "local"
 storage_path: "./storage"
 
 http_server:
-  address: "localhost:8080"
+  address: "localhost:8081"
   timeout: 5s
   idle_timeout: 120s
 
 storage_db:
   dsn: "postgres://gleboss:adminadmin@localhost:5432/antiplag_storage?sslmode=disable"
+analysis_db:
+  dsn: "postgres://gleboss:adminadmin@localhost:5432/antiplag_analysis?sslmode=disable"
+
+
+gateway:
+  storage_base_url: "http://localhost:8081"
+  analysis_base_url: "http://localhost:8069"
+  address: "localhost:8052"
