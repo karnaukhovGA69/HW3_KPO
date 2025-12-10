@@ -1,6 +1,6 @@
-/connect antiplag_storage;
+\connect antiplag_storage;
 
-CREATE TABLE IF NOT CREATE works (
+CREATE TABLE works (
     id SERIAL PRIMARY KEY,
     student TEXT NOT NULL,
     task TEXT NOT NULL,

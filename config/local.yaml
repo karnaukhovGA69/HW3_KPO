@@ -7,4 +7,4 @@ http_server:
   idle_timeout: 120s
 
 storage_db:
-  dsn: "postgres://gleboss:adminadmin@localhost:5433/antiplag_storage?sslmode=disable"
+  dsn: "postgres://gleboss:adminadmin@localhost:5432/antiplag_storage?sslmode=disable"
