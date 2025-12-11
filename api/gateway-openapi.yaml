@@ -1,0 +1,147 @@
+openapi: 3.0.3
+info:
+  title: Antiplag Microservices API
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8052
+    description: Gateway (для демонстрации)
+  - url: http://localhost:8081
+    description: Storage service
+  - url: http://localhost:8069
+    description: Analysis service
+
+paths:
+  /works:
+    post:
+      summary: Создать работу через gateway (создаётся work + pending report)
+      tags: [gateway]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [student, task, file_path]
+              properties:
+                student:
+                  type: string
+                  example: "Иванов Иван"
+                task:
+                  type: string
+                  example: "Лаба 1"
+                file_path:
+                  type: string
+                  example: "./storage/lab1.txt"
+      responses:
+        '200':
+          description: Работа и связанный отчёт успешно созданы
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  work:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 1
+                      student:
+                        type: string
+                      task:
+                        type: string
+                      file_path:
+                        type: string
+                      uploaded_at:
+                        type: string
+                        example: "2025-12-11 19:59:37"
+                  report:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 1
+                      work_id:
+                        type: integer
+                        example: 1
+                      status:
+                        type: string
+                        example: "pending"
+                      similarity:
+                        type: number
+                        format: double
+                        example: -1
+                      details:
+                        type: string
+                        example: "pending"
+                      created_at:
+                        type: string
+                        example: "2025-12-11 19:59:37"
+
+  /works/{id}:
+    get:
+      summary: Получить работу (storage-сервис напрямую)
+      tags: [storage]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 1
+      responses:
+        '200':
+          description: Найденная работа
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  student:
+                    type: string
+                  task:
+                    type: string
+                  file_path:
+                    type: string
+                  uploaded_at:
+                    type: string
+        '404':
+          description: Работа не найдена
+
+  /analysis/{id}:
+    get:
+      summary: Получить отчёт по работе (analysis-сервис напрямую)
+      tags: [analysis]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 1
+      responses:
+        '200':
+          description: Найденный отчёт
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  work_id:
+                    type: integer
+                  status:
+                    type: string
+                  similarity:
+                    type: number
+                    format: double
+                  details:
+                    type: string
+                  created_at:
+                    type: string
+        '404':
+          description: Отчёт не найден
