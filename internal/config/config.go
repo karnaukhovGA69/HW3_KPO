@@ -25,7 +25,7 @@ type HTTPServer struct {
 }
 
 type StorageDB struct {
-	DSN string `yaml:"dsn" env:"STORAGE_DB_DCN"`
+	DSN string `yaml:"dsn" env:"STORAGE_DB_DSN"`
 }
 
 type AnalysisDB struct {

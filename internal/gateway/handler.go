@@ -10,10 +10,6 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// POST /works на gateway:
-// 1) создаёт работу в storage
-// 2) создаёт для неё pending-отчёт в analysis
-// 3) возвращает объединённый ответ
 func (g *Gateway) CreateWorkAndReport(w http.ResponseWriter, r *http.Request) {
 	var req CreateWorkRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -22,7 +18,6 @@ func (g *Gateway) CreateWorkAndReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// --- 1. создаём работу в storage ---
 	storageURL := g.storageBaseURL + "/works"
 
 	bodyBytes, err := json.Marshal(req)
@@ -118,10 +113,6 @@ func (g *Gateway) CreateWorkAndReport(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// GET /works/{id} на gateway:
-// 1) получает работу из storage
-// 2) получает отчёт из analysis по work_id
-// 3) возвращает объединённый ответ
 func (g *Gateway) GetWorkProxy(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
@@ -129,7 +120,6 @@ func (g *Gateway) GetWorkProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// --- 1. получаем работу из storage ---
 	storageURL := g.storageBaseURL + "/works/" + id
 	stReq, err := http.NewRequestWithContext(r.Context(), http.MethodGet, storageURL, nil)
 	if err != nil {
@@ -161,7 +151,6 @@ func (g *Gateway) GetWorkProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// --- 2. получаем отчёт из analysis по work_id ---
 	analysisURL := g.analysisBaseURL + "/reports/work/" + id
 	anReq, err := http.NewRequestWithContext(r.Context(), http.MethodGet, analysisURL, nil)
 	if err != nil {
@@ -173,7 +162,12 @@ func (g *Gateway) GetWorkProxy(w http.ResponseWriter, r *http.Request) {
 	anResp, err := g.httpClient.Do(anReq)
 	if err != nil {
 		slog.Error("analysis get request failed", "err", err)
-		http.Error(w, "analysis service unavailable", http.StatusBadGateway)
+		slog.Warn("analysis service unavailable, returning work without report")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		if err := json.NewEncoder(w).Encode(workData); err != nil {
+			slog.Error("failed to encode work response", "err", err)
+		}
 		return
 	}
 	defer anResp.Body.Close()
@@ -182,7 +176,6 @@ func (g *Gateway) GetWorkProxy(w http.ResponseWriter, r *http.Request) {
 	if anResp.StatusCode == http.StatusOK {
 		if err := json.NewDecoder(anResp.Body).Decode(&reportData); err != nil {
 			slog.Warn("failed to decode analysis response, returning work without report", "err", err)
-			// Если не удалось получить отчёт, возвращаем только работу
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			if err := json.NewEncoder(w).Encode(workData); err != nil {
@@ -190,9 +183,18 @@ func (g *Gateway) GetWorkProxy(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
+	} else if anResp.StatusCode == http.StatusNotFound {
+		slog.Info("report not found for work_id, returning work without report", "work_id", id)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		if err := json.NewEncoder(w).Encode(workData); err != nil {
+			slog.Error("failed to encode work response", "err", err)
+		}
+		return
 	} else {
-		slog.Warn("analysis returned non-200, returning work without report", "status", anResp.StatusCode)
-		// Если отчёт не найден, возвращаем только работу
+		slog.Error("analysis service returned error, returning work without report",
+			"status", anResp.StatusCode,
+			"work_id", id)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		if err := json.NewEncoder(w).Encode(workData); err != nil {
@@ -201,7 +203,6 @@ func (g *Gateway) GetWorkProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// --- 3. возвращаем объединённый ответ ---
 	combined := CombinedWorkResponse{
 		Work:   workData,
 		Report: reportData,
@@ -213,4 +214,3 @@ func (g *Gateway) GetWorkProxy(w http.ResponseWriter, r *http.Request) {
 		slog.Error("failed to encode gateway response", "err", err)
 	}
 }
-

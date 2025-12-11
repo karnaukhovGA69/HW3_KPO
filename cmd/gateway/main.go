@@ -39,7 +39,6 @@ func main() {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
-	// high-level API
 	r.Post("/works", gw.CreateWorkAndReport)
 	r.Get("/works/{id}", gw.GetWorkProxy)
 

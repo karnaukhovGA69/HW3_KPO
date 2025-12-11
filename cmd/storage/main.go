@@ -24,6 +24,7 @@ func main() {
 		"env", cfg.Env,
 		"addr", cfg.HTTPServer.Address,
 		"storage_path", cfg.StoragePath,
+		"dsn", cfg.StorageDB.DSN,
 	)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)

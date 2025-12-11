@@ -2,12 +2,16 @@ package analysis
 
 import (
 	"log/slog"
+	"math/rand"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
 )
+
+var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 type Handler struct {
 	repo *Repository
@@ -50,13 +54,16 @@ func (h *Handler) CreateReport(w http.ResponseWriter, r *http.Request) {
 
 	switch req.Status {
 	case "done":
+		if req.Similarity == 0 || req.Similarity == SimilarityUnknown {
+			req.Similarity = float64(rng.Intn(101))
+		}
 		if req.Similarity < 0 || req.Similarity > 100 {
 			http.Error(w, "similarity must be between 0 and 100", http.StatusBadRequest)
 			return
 		}
 	default:
 		if req.Similarity == 0 {
-			req.Similarity = SimilarityUnknown // -1.0
+			req.Similarity = SimilarityUnknown
 		}
 	}
 
