@@ -113,3 +113,33 @@ func (h *Handler) GetReport(w http.ResponseWriter, r *http.Request) {
 	render.Status(r, http.StatusOK)
 	render.JSON(w, r, response)
 }
+
+func (h *Handler) GetReportByWorkID(w http.ResponseWriter, r *http.Request) {
+	workIDStr := chi.URLParam(r, "work_id")
+	if workIDStr == "" {
+		http.Error(w, "work_id parameter is required", http.StatusBadRequest)
+		return
+	}
+
+	workID, err := strconv.ParseInt(workIDStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid work_id parameter", http.StatusBadRequest)
+		return
+	}
+	report, err := h.repo.GetReportByWorkID(r.Context(), workID)
+	if err != nil {
+		slog.Error("failed to get report by work_id", "err", err)
+		http.Error(w, "Not Found", http.StatusNotFound)
+		return
+	}
+	response := &reportResponse{
+		ID:         report.ID,
+		WorkID:     report.WorkID,
+		Status:     report.Status,
+		Similarity: report.Similarity,
+		Details:    report.Details,
+		CreatedAt:  report.CreatedAt.Format("2006-01-02 15:04:05"),
+	}
+	render.Status(r, http.StatusOK)
+	render.JSON(w, r, response)
+}

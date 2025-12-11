@@ -9,12 +9,13 @@ import (
 )
 
 type Config struct {
-	Env         string        `yaml:"env" env:"ENV" env-default:"local"`
-	StoragePath string        `yaml:"storage_path" env:"STORAGE_PATH" env-default:"./storage"`
-	HTTPServer  HTTPServer    `yaml:"http_server"`
-	StorageDB   StorageDB     `yaml:"storage_db"`
-	AnalysisDB  AnalysisDB    `yaml:"analysis_db"`
-	Gateway     GatewayConfig `yaml:"gateway"`
+	Env            string        `yaml:"env" env:"ENV" env-default:"local"`
+	StoragePath    string        `yaml:"storage_path" env:"STORAGE_PATH" env-default:"./storage"`
+	HTTPServer     HTTPServer    `yaml:"http_server"`
+	AnalysisServer HTTPServer    `yaml:"analysis_server"`
+	StorageDB      StorageDB     `yaml:"storage_db"`
+	AnalysisDB     AnalysisDB    `yaml:"analysis_db"`
+	Gateway        GatewayConfig `yaml:"gateway"`
 }
 
 type HTTPServer struct {

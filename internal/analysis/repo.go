@@ -52,5 +52,20 @@ func (r Repository) GetReport(ctx context.Context, id int64) (*Report, error) {
 		return nil, fmt.Errorf("failed to get report: %w", err)
 	}
 	return &report, nil
+}
 
+func (r Repository) GetReportByWorkID(ctx context.Context, workID int64) (*Report, error) {
+	const query = `
+    SELECT id, work_id, status, similarity, details, created_at 
+    FROM reports 
+    WHERE work_id = $1
+    ORDER BY created_at DESC
+    LIMIT 1;`
+
+	row := r.pool.QueryRow(ctx, query, workID)
+	var report Report
+	if err := row.Scan(&report.ID, &report.WorkID, &report.Status, &report.Similarity, &report.Details, &report.CreatedAt); err != nil {
+		return nil, fmt.Errorf("failed to get report by work_id: %w", err)
+	}
+	return &report, nil
 }
