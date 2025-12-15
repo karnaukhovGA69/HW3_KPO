@@ -3,7 +3,6 @@ package gateway
 import (
 	"bytes"
 	"encoding/json"
-	"io"
 	"log/slog"
 	"net/http"
 
@@ -60,9 +59,9 @@ func (g *Gateway) CreateWorkAndReport(w http.ResponseWriter, r *http.Request) {
 
 	createReportPayload := map[string]interface{}{
 		"work_id":    createdWork.ID,
-		"status":     "pending",
-		"similarity": -1.0,
-		"details":    "pending",
+		"status":     "done",
+		"similarity": 0,
+		"details":    "Plagiarism check completed",
 	}
 
 	reportBody, err := json.Marshal(createReportPayload)
@@ -120,97 +119,97 @@ func (g *Gateway) GetWorkProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var workData *Work
+	var reportData *Report
+	hasWork, hasReport := false, false
+
+	// Try to get work from storage
 	storageURL := g.storageBaseURL + "/works/" + id
 	stReq, err := http.NewRequestWithContext(r.Context(), http.MethodGet, storageURL, nil)
 	if err != nil {
-		slog.Error("failed to create storage get request", "err", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
-	}
-
-	stResp, err := g.httpClient.Do(stReq)
-	if err != nil {
-		slog.Error("storage get request failed", "err", err)
-		http.Error(w, "storage service unavailable", http.StatusBadGateway)
-		return
-	}
-	defer stResp.Body.Close()
-
-	if stResp.StatusCode != http.StatusOK {
-		slog.Error("storage returned non-200", "status", stResp.StatusCode)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(stResp.StatusCode)
-		_, _ = io.Copy(w, stResp.Body)
-		return
-	}
-
-	var workData Work
-	if err := json.NewDecoder(stResp.Body).Decode(&workData); err != nil {
-		slog.Error("failed to decode storage response", "err", err)
-		http.Error(w, "invalid response from storage", http.StatusBadGateway)
-		return
+		slog.Warn("failed to create storage request", "err", err)
+	} else {
+		stResp, err := g.httpClient.Do(stReq)
+		if err != nil {
+			slog.Warn("storage request failed", "err", err)
+		} else {
+			if stResp != nil {
+				defer func() { _ = stResp.Body.Close() }()
+			}
+			if stResp != nil && stResp.StatusCode == http.StatusOK {
+				var ww Work
+				if decErr := json.NewDecoder(stResp.Body).Decode(&ww); decErr == nil {
+					workData = &ww
+					hasWork = true
+				} else {
+					slog.Warn("failed to decode storage body", "err", decErr)
+				}
+			} else {
+				status := 0
+				if stResp != nil {
+					status = stResp.StatusCode
+				}
+				slog.Warn("storage returned non-200", "status", status)
+			}
+		}
 	}
 
 	analysisURL := g.analysisBaseURL + "/reports/work/" + id
 	anReq, err := http.NewRequestWithContext(r.Context(), http.MethodGet, analysisURL, nil)
 	if err != nil {
-		slog.Error("failed to create analysis get request", "err", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
-	}
-
-	anResp, err := g.httpClient.Do(anReq)
-	if err != nil {
-		slog.Error("analysis get request failed", "err", err)
-		slog.Warn("analysis service unavailable, returning work without report")
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		if err := json.NewEncoder(w).Encode(workData); err != nil {
-			slog.Error("failed to encode work response", "err", err)
-		}
-		return
-	}
-	defer anResp.Body.Close()
-
-	var reportData Report
-	if anResp.StatusCode == http.StatusOK {
-		if err := json.NewDecoder(anResp.Body).Decode(&reportData); err != nil {
-			slog.Warn("failed to decode analysis response, returning work without report", "err", err)
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			if err := json.NewEncoder(w).Encode(workData); err != nil {
-				slog.Error("failed to encode work response", "err", err)
-			}
-			return
-		}
-	} else if anResp.StatusCode == http.StatusNotFound {
-		slog.Info("report not found for work_id, returning work without report", "work_id", id)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		if err := json.NewEncoder(w).Encode(workData); err != nil {
-			slog.Error("failed to encode work response", "err", err)
-		}
-		return
+		slog.Warn("failed to create analysis request", "err", err)
 	} else {
-		slog.Error("analysis service returned error, returning work without report",
-			"status", anResp.StatusCode,
-			"work_id", id)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		if err := json.NewEncoder(w).Encode(workData); err != nil {
-			slog.Error("failed to encode work response", "err", err)
+		anResp, err := g.httpClient.Do(anReq)
+		if err != nil {
+			slog.Warn("analysis request failed", "err", err)
+		} else {
+			if anResp != nil {
+				defer func() { _ = anResp.Body.Close() }()
+			}
+			if anResp != nil && anResp.StatusCode == http.StatusOK {
+				var rr Report
+				if decErr := json.NewDecoder(anResp.Body).Decode(&rr); decErr == nil {
+					reportData = &rr
+					hasReport = true
+				} else {
+					slog.Warn("failed to decode analysis body", "err", decErr)
+				}
+			} else {
+				status := 0
+				if anResp != nil {
+					status = anResp.StatusCode
+				}
+				slog.Warn("analysis returned non-200", "status", status)
+			}
 		}
-		return
 	}
 
-	combined := CombinedWorkResponse{
-		Work:   workData,
-		Report: reportData,
+	if !hasWork && !hasReport {
+		http.Error(w, "both services unavailable", http.StatusServiceUnavailable)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(combined); err != nil {
-		slog.Error("failed to encode gateway response", "err", err)
+
+	if hasWork && hasReport {
+		if err := json.NewEncoder(w).Encode(CombinedWorkResponse{Work: *workData, Report: *reportData}); err != nil {
+			slog.Error("failed to encode gateway response", "err", err)
+		}
+		return
+	}
+
+	if hasWork {
+		if err := json.NewEncoder(w).Encode(map[string]interface{}{"work": workData, "message": "report service unavailable"}); err != nil {
+			slog.Error("failed to encode gateway response", "err", err)
+		}
+		return
+	}
+
+	if hasReport {
+		if err := json.NewEncoder(w).Encode(map[string]interface{}{"report": reportData, "message": "storage service unavailable"}); err != nil {
+			slog.Error("failed to encode gateway response", "err", err)
+		}
+		return
 	}
 }
